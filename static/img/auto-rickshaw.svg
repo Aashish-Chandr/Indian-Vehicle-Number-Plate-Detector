@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="240px" height="120px" viewBox="0 0 240 120" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>Indian Auto Rickshaw</title>
+    <g id="auto-rickshaw" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <!-- Wheels -->
+        <circle id="wheel-back-left" cx="45" cy="90" r="15" fill="#333333" stroke="#666666" stroke-width="2"/>
+        <circle id="wheel-back-right" cx="90" cy="90" r="15" fill="#333333" stroke="#666666" stroke-width="2"/>
+        <circle id="wheel-front" cx="160" cy="90" r="15" fill="#333333" stroke="#666666" stroke-width="2"/>
+        
+        <!-- Wheel spokes -->
+        <line x1="45" y1="90" x2="45" y2="75" stroke="#999999" stroke-width="2"/>
+        <line x1="45" y1="90" x2="45" y2="105" stroke="#999999" stroke-width="2"/>
+        <line x1="45" y1="90" x2="30" y2="90" stroke="#999999" stroke-width="2"/>
+        <line x1="45" y1="90" x2="60" y2="90" stroke="#999999" stroke-width="2"/>
+        <line x1="45" y1="90" x2="35" y2="80" stroke="#999999" stroke-width="2"/>
+        <line x1="45" y1="90" x2="55" y2="100" stroke="#999999" stroke-width="2"/>
+        <line x1="45" y1="90" x2="55" y2="80" stroke="#999999" stroke-width="2"/>
+        <line x1="45" y1="90" x2="35" y2="100" stroke="#999999" stroke-width="2"/>
+        
+        <line x1="90" y1="90" x2="90" y2="75" stroke="#999999" stroke-width="2"/>
+        <line x1="90" y1="90" x2="90" y2="105" stroke="#999999" stroke-width="2"/>
+        <line x1="90" y1="90" x2="75" y2="90" stroke="#999999" stroke-width="2"/>
+        <line x1="90" y1="90" x2="105" y2="90" stroke="#999999" stroke-width="2"/>
+        <line x1="90" y1="90" x2="80" y2="80" stroke="#999999" stroke-width="2"/>
+        <line x1="90" y1="90" x2="100" y2="100" stroke="#999999" stroke-width="2"/>
+        <line x1="90" y1="90" x2="100" y2="80" stroke="#999999" stroke-width="2"/>
+        <line x1="90" y1="90" x2="80" y2="100" stroke="#999999" stroke-width="2"/>
+        
+        <line x1="160" y1="90" x2="160" y2="75" stroke="#999999" stroke-width="2"/>
+        <line x1="160" y1="90" x2="160" y2="105" stroke="#999999" stroke-width="2"/>
+        <line x1="160" y1="90" x2="145" y2="90" stroke="#999999" stroke-width="2"/>
+        <line x1="160" y1="90" x2="175" y2="90" stroke="#999999" stroke-width="2"/>
+        <line x1="160" y1="90" x2="150" y2="80" stroke="#999999" stroke-width="2"/>
+        <line x1="160" y1="90" x2="170" y2="100" stroke="#999999" stroke-width="2"/>
+        <line x1="160" y1="90" x2="170" y2="80" stroke="#999999" stroke-width="2"/>
+        <line x1="160" y1="90" x2="150" y2="100" stroke="#999999" stroke-width="2"/>
+        
+        <!-- Body -->
+        <path id="auto-body" d="M30,55 L95,55 L120,30 L170,30 L185,45 L185,75 L170,75 L170,85 L150,85 L150,75 L95,75 L95,85 L40,85 L40,75 L30,75 Z" fill="#FFC107" stroke="#E65100" stroke-width="2"/>
+        
+        <!-- Roof -->
+        <path id="roof" d="M60,55 L90,55 L110,30 L135,30 L115,55 Z" fill="#29B6F6" stroke="#0277BD" stroke-width="2"/>
+        
+        <!-- Windshield -->
+        <path id="windshield" d="M120,30 L135,30 L150,45 L150,60 L120,60 Z" fill="#B3E5FC" stroke="#0277BD" stroke-width="2"/>
+        
+        <!-- License plate -->
+        <rect id="license-plate" x="95" y="62" width="30" height="12" fill="#FFFFFF" stroke="#333333" stroke-width="1"/>
+        <text x="110" y="70" font-family="Arial" font-size="6" fill="#333333" text-anchor="middle" alignment-baseline="middle">IND</text>
+        
+        <!-- Headlight -->
+        <circle id="headlight" cx="180" cy="50" r="5" fill="#FFEB3B" stroke="#FFA000" stroke-width="1"/>
+        
+        <!-- Handle bars -->
+        <path id="handlebar" d="M155,45 C165,45 165,55 175,55" stroke="#333333" stroke-width="3" stroke-linecap="round"/>
+        
+        <!-- Exhaust -->
+        <path id="exhaust" d="M30,65 L15,65 L10,60" stroke="#555555" stroke-width="2" stroke-linecap="round"/>
+        
+        <!-- Smoke animation group -->
+        <g id="smoke-group">
+            <circle id="smoke1" cx="10" cy="60" r="3" fill="#999999" opacity="0.7">
+                <animate attributeName="cx" values="10;0;-10" dur="2s" repeatCount="indefinite" />
+                <animate attributeName="cy" values="60;55;50" dur="2s" repeatCount="indefinite" />
+                <animate attributeName="r" values="3;4;5" dur="2s" repeatCount="indefinite" />
+                <animate attributeName="opacity" values="0.7;0.4;0" dur="2s" repeatCount="indefinite" />
+            </circle>
+            <circle id="smoke2" cx="12" cy="58" r="2" fill="#999999" opacity="0.5">
+                <animate attributeName="cx" values="12;2;-8" dur="2s" begin="0.5s" repeatCount="indefinite" />
+                <animate attributeName="cy" values="58;53;48" dur="2s" begin="0.5s" repeatCount="indefinite" />
+                <animate attributeName="r" values="2;3;4" dur="2s" begin="0.5s" repeatCount="indefinite" />
+                <animate attributeName="opacity" values="0.5;0.3;0" dur="2s" begin="0.5s" repeatCount="indefinite" />
+            </circle>
+            <circle id="smoke3" cx="8" cy="62" r="2.5" fill="#999999" opacity="0.6">
+                <animate attributeName="cx" values="8;-2;-12" dur="2s" begin="0.7s" repeatCount="indefinite" />
+                <animate attributeName="cy" values="62;57;52" dur="2s" begin="0.7s" repeatCount="indefinite" />
+                <animate attributeName="r" values="2.5;3.5;4.5" dur="2s" begin="0.7s" repeatCount="indefinite" />
+                <animate attributeName="opacity" values="0.6;0.3;0" dur="2s" begin="0.7s" repeatCount="indefinite" />
+            </circle>
+        </g>
+        
+        <!-- Road -->
+        <line x1="0" y1="105" x2="240" y2="105" stroke="#555555" stroke-width="3"/>
+        
+        <!-- Wheel animation -->
+        <animateTransform 
+            xlink:href="#wheel-back-left"
+            attributeName="transform"
+            attributeType="XML"
+            type="rotate"
+            from="0 45 90"
+            to="360 45 90"
+            dur="1s"
+            repeatCount="indefinite"/>
+        
+        <animateTransform 
+            xlink:href="#wheel-back-right"
+            attributeName="transform"
+            attributeType="XML"
+            type="rotate"
+            from="0 90 90"
+            to="360 90 90"
+            dur="1s"
+            repeatCount="indefinite"/>
+        
+        <animateTransform 
+            xlink:href="#wheel-front"
+            attributeName="transform"
+            attributeType="XML"
+            type="rotate"
+            from="0 160 90"
+            to="360 160 90"
+            dur="1s"
+            repeatCount="indefinite"/>
+            
+        <!-- Auto rickshaw bouncing animation -->
+        <animateTransform 
+            xlink:href="#auto-body"
+            attributeName="transform"
+            attributeType="XML"
+            type="translate"
+            values="0 0; 0 -3; 0 0"
+            dur="0.5s"
+            repeatCount="indefinite"/>
+            
+        <animateTransform 
+            xlink:href="#roof"
+            attributeName="transform"
+            attributeType="XML"
+            type="translate"
+            values="0 0; 0 -3; 0 0"
+            dur="0.5s"
+            repeatCount="indefinite"/>
+            
+        <animateTransform 
+            xlink:href="#windshield"
+            attributeName="transform"
+            attributeType="XML"
+            type="translate"
+            values="0 0; 0 -3; 0 0"
+            dur="0.5s"
+            repeatCount="indefinite"/>
+            
+        <animateTransform 
+            xlink:href="#license-plate"
+            attributeName="transform"
+            attributeType="XML"
+            type="translate"
+            values="0 0; 0 -3; 0 0"
+            dur="0.5s"
+            repeatCount="indefinite"/>
+            
+        <animateTransform 
+            xlink:href="#headlight"
+            attributeName="transform"
+            attributeType="XML"
+            type="translate"
+            values="0 0; 0 -3; 0 0"
+            dur="0.5s"
+            repeatCount="indefinite"/>
+            
+        <animateTransform 
+            xlink:href="#handlebar"
+            attributeName="transform"
+            attributeType="XML"
+            type="translate"
+            values="0 0; 0 -3; 0 0"
+            dur="0.5s"
+            repeatCount="indefinite"/>
+            
+        <animateTransform 
+            xlink:href="#exhaust"
+            attributeName="transform"
+            attributeType="XML"
+            type="translate"
+            values="0 0; 0 -3; 0 0"
+            dur="0.5s"
+            repeatCount="indefinite"/>
+    </g>
+</svg>
