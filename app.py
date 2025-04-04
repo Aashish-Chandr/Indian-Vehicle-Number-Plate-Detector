@@ -267,5 +267,36 @@ def get_training_status():
         'model_path': model_path if status else None
     })
 
+@app.route('/download_kaggle_dataset', methods=['POST'])
+def download_kaggle_dataset():
+    """
+    Download dataset from Kaggle for training.
+    """
+    try:
+        # Import here to avoid loading unnecessary dependencies at startup
+        from kaggle_dataset_loader import download_kaggle_dataset
+        
+        dataset_name = request.form.get('dataset_name', 'saisirishan/indian-vehicle-dataset')
+        target_dir = os.path.join(app.config['DATASET_FOLDER'], 'kaggle_vehicles')
+        
+        # Create a unique ID for this download
+        dataset_id = str(uuid.uuid4())
+        target_dir = os.path.join(app.config['DATASET_FOLDER'], dataset_id)
+        
+        # Download the dataset
+        logger.info(f"Starting Kaggle dataset download: {dataset_name}")
+        download_path = download_kaggle_dataset(dataset_name, target_dir)
+        logger.info(f"Kaggle dataset downloaded to: {download_path}")
+        
+        return jsonify({
+            'success': True,
+            'dataset_id': dataset_id,
+            'dataset_path': download_path,
+            'message': 'Dataset downloaded successfully and is ready for training.'
+        })
+    except Exception as e:
+        logger.error(f"Error downloading Kaggle dataset: {str(e)}")
+        return jsonify({'error': f'Error downloading dataset: {str(e)}'}), 500
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
