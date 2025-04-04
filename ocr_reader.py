@@ -65,6 +65,14 @@ def extract_text_from_plate(plate_image, plate_type='indian'):
             logger.error("Invalid plate image for OCR")
             return "Could not read plate text"
         
+        # For Indian plates, first check if it's the special IND format
+        if plate_type.lower() == 'indian':
+            is_ind_plate, ind_plate_text = process_indian_ind_plate(plate_image)
+            if is_ind_plate and ind_plate_text:
+                logger.debug(f"Detected IND format Indian plate: {ind_plate_text}")
+                # This is a high confidence match since it has the specific IND marker
+                return ind_plate_text
+        
         # Try multiple preprocessing methods and configurations
         ocr_results = []
         confidences = []
@@ -423,6 +431,88 @@ def preprocess_plate_image_resized(plate_image):
     # No resizing as requested
     return cleaned
 
+def process_indian_ind_plate(plate_image):
+    """
+    Process Indian license plates with "IND" marker.
+    These plates have a specific format: "IND MH01AE8017" for example.
+    
+    Args:
+        plate_image: OpenCV image of the plate
+        
+    Returns:
+        is_ind_plate: Boolean indicating if this is an IND format plate
+        text: Processed text from the plate
+    """
+    try:
+        # Make a copy
+        img = plate_image.copy()
+        
+        # Resize to a standard height while maintaining aspect ratio
+        height, width = img.shape[:2]
+        new_height = 150  # Standard height
+        ratio = new_height / height
+        new_width = int(width * ratio)
+        resized = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_CUBIC)
+        
+        # Apply edge enhancement
+        gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+        
+        # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization)
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+        enhanced = clahe.apply(gray)
+        
+        # Apply threshold (adaptive threshold often works better for license plates)
+        thresh = cv2.adaptiveThreshold(enhanced, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                      cv2.THRESH_BINARY_INV, 13, 7)
+        
+        # Run OCR with specific configuration for "IND" format
+        custom_config = '--oem 3 --psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+        
+        # Create a temporary file for tesseract
+        with tempfile.NamedTemporaryFile(prefix='tess_ind_', suffix='_input.PNG') as temp:
+            cv2.imwrite(temp.name, thresh)
+            ocr_result = pytesseract.image_to_string(temp.name, config=custom_config).strip()
+        
+        # Check if the result contains "IND" marker
+        if "IND" in ocr_result or "1ND" in ocr_result:  # Allow some OCR errors
+            # Clean up the result
+            text = ocr_result.replace("1ND", "IND")  # Fix common OCR error
+            
+            # Extract the license plate number
+            # Pattern for Indian plates with IND marker: "IND MHOLAE8017"
+            match = re.search(r'IND\s*([A-Z0-9]{2,12})', text, re.IGNORECASE)
+            if match:
+                plate_number = match.group(1)
+                # Clean up any remaining spaces or unwanted characters
+                plate_number = re.sub(r'[^A-Z0-9]', '', plate_number.upper())
+                
+                if len(plate_number) >= 6:  # Minimum valid length
+                    return True, plate_number
+        
+        # Try with another preprocessing method specifically for IND plates
+        # Sometimes the IND marker is clearer with binary thresholding
+        _, binary = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+        
+        with tempfile.NamedTemporaryFile(prefix='tess_ind2_', suffix='_input.PNG') as temp:
+            cv2.imwrite(temp.name, binary)
+            ocr_result = pytesseract.image_to_string(temp.name, config=custom_config).strip()
+        
+        if "IND" in ocr_result or "1ND" in ocr_result:
+            text = ocr_result.replace("1ND", "IND")
+            match = re.search(r'IND\s*([A-Z0-9]{2,12})', text, re.IGNORECASE)
+            if match:
+                plate_number = match.group(1)
+                plate_number = re.sub(r'[^A-Z0-9]', '', plate_number.upper())
+                
+                if len(plate_number) >= 6:
+                    return True, plate_number
+        
+        return False, ""
+        
+    except Exception as e:
+        logger.error(f"Error in process_indian_ind_plate: {str(e)}")
+        return False, ""
+
 def clean_plate_text(text, plate_type='indian'):
     """
     Clean the OCR output to format it as a valid license plate.
@@ -445,6 +535,13 @@ def clean_plate_text(text, plate_type='indian'):
     text = text.replace('O', '0').replace('I', '1').replace('S', '5').replace('Z', '2')
     
     if plate_type.lower() == 'indian':
+        # Check for IND marker in Indian plates first (e.g., IND MH01AE8017)
+        ind_pattern = r'IND\s*([A-Z0-9]{2,12})'
+        ind_match = re.search(ind_pattern, text, re.IGNORECASE)
+        if ind_match:
+            plate_number = ind_match.group(1)
+            return re.sub(r'[^A-Z0-9]', '', plate_number.upper())
+            
         # Additional cleanup specific to Indian plates
         # Common replacements for Indian plates
         text = text.replace('8', 'B').replace('B', '8', 1).replace('D', '0').replace('Q', '0')
