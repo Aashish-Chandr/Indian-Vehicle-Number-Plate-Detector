@@ -208,14 +208,32 @@ def calculate_text_confidence(text, plate_type='indian'):
     if not (has_letters and has_numbers):
         return 0.1  # Very low confidence if missing either letters or numbers
     
-    # Indian plates check (e.g., MH12AB1234)
+    # Indian plates check with expanded patterns (e.g., MH12AB1234, DL2CAB1234, etc.)
     if plate_type.lower() == 'indian':
+        # Perfect Indian license plate format
         if re.match(r'^[A-Z]{2}\d{1,2}[A-Z]{1,3}\d{1,4}$', text):
-            return 0.95  # Very high confidence for perfect Indian pattern match
+            return 0.95  # Very high confidence
         
-        # Check for partial matches to known Indian formats
-        if re.match(r'^[A-Z]{2}\d{1,2}', text):  # Has state code and district code
+        # Check for partial but strong matches to known Indian formats
+        if re.match(r'^[A-Z]{2}\d{1,2}[A-Z]+\d{2,4}$', text):  # Has all components but maybe wrong length
+            return 0.9
+            
+        # Has state code, district code and some additional characters
+        if re.match(r'^[A-Z]{2}\d{1,2}[A-Z0-9]+$', text):
+            return 0.85
+        
+        # Has state code and district code (beginning is correct)
+        if re.match(r'^[A-Z]{2}\d{1,2}', text):
             return 0.8
+            
+        # Check for specific state codes from India (increases confidence)
+        indian_states = ['AP', 'AR', 'AS', 'BR', 'CG', 'GA', 'GJ', 'HR', 'HP', 
+                         'JK', 'JH', 'KA', 'KL', 'MP', 'MH', 'MN', 'ML', 'MZ', 
+                         'NL', 'OD', 'PB', 'RJ', 'SK', 'TN', 'TS', 'TR', 'UK', 
+                         'UP', 'WB', 'AN', 'CH', 'DN', 'DD', 'DL', 'LD', 'PY']
+        
+        if any(text.startswith(state) for state in indian_states):
+            return 0.75  # Good confidence if starts with a valid state code
     
     # European plates check
     elif plate_type.lower() == 'european':
@@ -252,6 +270,7 @@ def calculate_text_confidence(text, plate_type='indian'):
 def preprocess_plate_image(plate_image):
     """
     Preprocess the plate image to improve OCR accuracy.
+    Specifically optimized for Indian plates.
     
     Args:
         plate_image: OpenCV image of the plate
@@ -260,29 +279,49 @@ def preprocess_plate_image(plate_image):
         processed_image: Preprocessed image ready for OCR
     """
     # Convert to grayscale
-    gray = cv2.cvtColor(plate_image, cv2.COLOR_BGR2GRAY)
+    if len(plate_image.shape) == 3:
+        gray = cv2.cvtColor(plate_image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = plate_image.copy()
     
     # Apply bilateral filter to remove noise while keeping edges sharp
-    bilateral = cv2.bilateralFilter(gray, 11, 17, 17)
+    # Parameters optimized for Indian plates (less smoothing to preserve fine details)
+    bilateral = cv2.bilateralFilter(gray, 9, 15, 15)
     
     # Normalize the image histogram for better contrast
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+    # Higher clip limit for Indian plates which may have varying contrast
+    clahe = cv2.createCLAHE(clipLimit=3.5, tileGridSize=(8, 8))
     enhanced = clahe.apply(bilateral)
     
-    # Apply Otsu's thresholding for better binarization
-    _, thresh = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    # Apply local thresholding for better handling of uneven lighting
+    # Indian plates often have shadow issues
+    thresh = cv2.adaptiveThreshold(
+        enhanced, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+        cv2.THRESH_BINARY, 15, 5  # Parameters tuned for Indian plates
+    )
     
-    # Fine-tune the threshold to improve character definition
     # Apply morphological operations to clean up the result
-    kernel = np.ones((2, 2), np.uint8)
+    # Slightly larger kernel for Indian plates to better connect characters
+    kernel = np.ones((3, 3), np.uint8)
     morph = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=1)
     
-    # No resizing - maintain original resolution
-    return morph
+    # Edge enhancement for better character definition
+    kernel_sharp = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
+    sharpened = cv2.filter2D(morph, -1, kernel_sharp)
+    
+    # Add border for better OCR
+    border_size = 10
+    final = cv2.copyMakeBorder(sharpened, border_size, border_size, 
+                             border_size, border_size,
+                             cv2.BORDER_CONSTANT, value=255)
+    
+    # No resizing - maintain original resolution as requested
+    return final
 
 def preprocess_plate_image_alternative(plate_image):
     """
-    Alternative preprocessing method using different thresholding technique.
+    Alternative preprocessing method optimized for Indian plates with high
+    contrast and better edge detection.
     
     Args:
         plate_image: OpenCV image of the plate
@@ -291,29 +330,48 @@ def preprocess_plate_image_alternative(plate_image):
         processed_image: Preprocessed image ready for OCR
     """
     # Convert to grayscale
-    gray = cv2.cvtColor(plate_image, cv2.COLOR_BGR2GRAY)
+    if len(plate_image.shape) == 3:
+        gray = cv2.cvtColor(plate_image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = plate_image.copy()
+    
+    # Apply image normalization to enhance contrast
+    # Normalize to full range 0-255
+    normalized = cv2.normalize(gray, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
     
     # Apply edge enhancement to make characters more distinct
-    kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
-    sharpened = cv2.filter2D(gray, -1, kernel)
+    # Stronger sharpening for Indian plates with sometimes faded characters
+    kernel = np.array([[-1,-1,-1], [-1,10,-1], [-1,-1,-1]])
+    sharpened = cv2.filter2D(normalized, -1, kernel)
     
-    # Apply Gaussian blur to reduce noise but maintain character edges
-    blur = cv2.GaussianBlur(sharpened, (3, 3), 0)
+    # Apply median blur - better at preserving edges than Gaussian for Indian plates
+    blur = cv2.medianBlur(sharpened, 3)
     
-    # Adaptive thresholding for better handling of lighting variations
-    thresh = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                               cv2.THRESH_BINARY, 11, 3)
+    # Apply Otsu's thresholding - works well for Indian plates with good contrast
+    _, binary = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     
     # Apply morphological operations to clean up the image
-    kernel = np.ones((2,2), np.uint8)
-    closing = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=1)
+    # Horizontal dilation helps with Indian plates where characters might be fading
+    kernel_h = np.ones((1, 3), np.uint8)
+    dilated_h = cv2.dilate(binary, kernel_h, iterations=1)
     
-    # No resizing - maintain original resolution
-    return closing
+    # Standard closing for general cleanup
+    kernel = np.ones((3, 3), np.uint8)
+    closing = cv2.morphologyEx(dilated_h, cv2.MORPH_CLOSE, kernel, iterations=1)
+    
+    # Add border for better OCR
+    border_size = 10
+    bordered = cv2.copyMakeBorder(closing, border_size, border_size, 
+                                border_size, border_size,
+                                cv2.BORDER_CONSTANT, value=255)
+    
+    # No resizing - maintain original resolution as requested
+    return bordered
 
 def preprocess_plate_image_resized(plate_image):
     """
-    Preprocessing with border padding but no resizing.
+    Preprocessing specifically for Indian plates with extreme contrast adjustment
+    and advanced morphological operations, but no resizing.
     
     Args:
         plate_image: OpenCV image of the plate
@@ -322,31 +380,48 @@ def preprocess_plate_image_resized(plate_image):
         processed_image: Preprocessed image ready for OCR
     """
     # Convert to grayscale
-    gray = cv2.cvtColor(plate_image, cv2.COLOR_BGR2GRAY)
+    if len(plate_image.shape) == 3:
+        gray = cv2.cvtColor(plate_image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = plate_image.copy()
     
     # Add border to help with character extraction - important for OCR
     border_size = 10
     gray_bordered = cv2.copyMakeBorder(gray, border_size, border_size, border_size, border_size,
                                      cv2.BORDER_CONSTANT, value=[255, 255, 255])
     
-    # Increase contrast for better character definition
-    alpha = 2.0  # Contrast control
-    beta = 5     # Brightness control
-    adjusted = cv2.convertScaleAbs(gray_bordered, alpha=alpha, beta=beta)
+    # Apply histogram equalization for better contrast
+    # This is particularly effective for Indian plates with varying lighting
+    equalized = cv2.equalizeHist(gray_bordered)
+    
+    # Increase contrast even more for Indian plates (which may have faded characters)
+    alpha = 2.2  # Slightly stronger contrast
+    beta = 10    # Increased brightness to highlight characters
+    adjusted = cv2.convertScaleAbs(equalized, alpha=alpha, beta=beta)
     
     # Apply bilateral filter to smooth noise while preserving edges
-    bilateral = cv2.bilateralFilter(adjusted, 9, 75, 75)
+    # Parameters optimized for Indian plates
+    bilateral = cv2.bilateralFilter(adjusted, 7, 45, 45)
     
-    # Apply local adaptive thresholding
-    thresh = cv2.adaptiveThreshold(bilateral, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                                 cv2.THRESH_BINARY, 13, 4)
+    # Apply local adaptive thresholding with parameters optimized for Indian plates
+    thresh = cv2.adaptiveThreshold(bilateral, 255, cv2.ADAPTIVE_THRESH_MEAN_C, 
+                                 cv2.THRESH_BINARY, 11, 2)
     
-    # Apply morphological closing to connect nearby components
-    kernel = np.ones((2,2), np.uint8)
-    morph = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=1)
+    # Apply specific morphological operations for Indian plates
+    # First dilate slightly to connect broken characters (common in Indian plates)
+    kernel_dilate = np.ones((2,1), np.uint8)  # Vertical dilation to connect character parts
+    dilated = cv2.dilate(thresh, kernel_dilate, iterations=1)
+    
+    # Then apply closing to remove small holes
+    kernel_close = np.ones((3,3), np.uint8)
+    morph = cv2.morphologyEx(dilated, cv2.MORPH_CLOSE, kernel_close, iterations=1)
+    
+    # Finally, apply opening to remove small noise
+    kernel_open = np.ones((2,2), np.uint8)
+    cleaned = cv2.morphologyEx(morph, cv2.MORPH_OPEN, kernel_open, iterations=1)
     
     # No resizing as requested
-    return morph
+    return cleaned
 
 def clean_plate_text(text, plate_type='indian'):
     """
@@ -370,8 +445,12 @@ def clean_plate_text(text, plate_type='indian'):
     text = text.replace('O', '0').replace('I', '1').replace('S', '5').replace('Z', '2')
     
     if plate_type.lower() == 'indian':
-        # Try to match Indian license plate format (e.g., MH12AB1234)
-        # Format: 2 letters (state code) + 2 digits (district code) + 2-3 letters + 1-4 digits
+        # Additional cleanup specific to Indian plates
+        # Common replacements for Indian plates
+        text = text.replace('8', 'B').replace('B', '8', 1).replace('D', '0').replace('Q', '0')
+        
+        # Try to match complete Indian license plate format (e.g., MH12AB1234)
+        # Format: 2 letters (state code) + 1-2 digits (district code) + 1-3 letters + 1-4 digits
         pattern = r'([A-Z]{2}\s*[0-9]{1,2}\s*[A-Z]{1,3}\s*[0-9]{1,4})'
         match = re.search(pattern, text)
         
@@ -381,18 +460,61 @@ def clean_plate_text(text, plate_type='indian'):
             # Remove any remaining spaces
             plate_text = re.sub(r'\s+', '', plate_text)
             return plate_text
+            
+        # Try more lenient patterns for partial matches (common in real-world OCR)
+        partial_patterns = [
+            r'([A-Z]{2})\s*([0-9]{1,2})\s*([A-Z]{1,3})\s*([0-9]{1,4})',  # Standard format with groups
+            r'([A-Z]{2})\s*([0-9]{1,2}).*?([0-9]{1,4})',                # Just state + district + ending numbers
+            r'([A-Z]{2}).*?([0-9]{3,4})'                                # Just state + any ending numbers
+        ]
         
-        # If no match found, try to construct a reasonable license plate format
+        for pattern in partial_patterns:
+            match = re.search(pattern, text)
+            if match:
+                groups = match.groups()
+                if len(groups) == 4:  # Full match with all components
+                    plate_text = groups[0] + groups[1] + groups[2] + groups[3]
+                    return plate_text
+                elif len(groups) == 3:  # State, district, and numbers, but missing letters
+                    # Construct with an 'X' placeholder for the missing letter section
+                    plate_text = groups[0] + groups[1] + 'X' + groups[2]
+                    return plate_text
+                elif len(groups) == 2:  # Just state and ending numbers
+                    # For very partial matches, try to guess district from context
+                    plate_text = groups[0] + '01X' + groups[1]  # Assume district 01 as fallback
+                    return plate_text
+        
+        # If no match with patterns, try to construct from identified components
         letters = re.findall(r'[A-Z]+', text)
         numbers = re.findall(r'[0-9]+', text)
         
-        if len(letters) >= 2 and len(numbers) >= 2:
+        if len(letters) >= 1 and len(numbers) >= 1:
             try:
-                # Try to construct in right format
-                constructed = letters[0][:2] + numbers[0][:2] + letters[-1][:2] + numbers[-1][:4]
+                # Get first letter group (likely state code)
+                state_code = letters[0][:2].ljust(2, 'X')  # Pad with X if needed
+                
+                # Get first number group (likely district code) - limit to 2 digits
+                district_code = numbers[0][:2].ljust(1, '0')  # Ensure at least 1 digit
+                
+                # Get remaining letters (registration letters) - default to X if not available
+                reg_letters = letters[-1][:2].ljust(1, 'X') if len(letters) > 1 else 'X'
+                
+                # Get remaining numbers (registration number) - default to 0000 if not available
+                reg_numbers = numbers[-1][:4].ljust(4, '0') if len(numbers) > 1 else '0000'
+                
+                # Construct in standard Indian format
+                constructed = state_code + district_code + reg_letters + reg_numbers
                 return constructed
             except:
-                pass
+                # If construction fails, just concatenate available parts
+                parts = []
+                for letter_group in letters[:2]:  # Only use first two letter groups
+                    parts.append(letter_group[:3])  # Limit each group to 3 chars
+                for number_group in numbers[:2]:  # Only use first two number groups
+                    parts.append(number_group[:4])  # Limit each group to 4 digits
+                
+                if parts:
+                    return ''.join(parts)[:10]  # Limit to reasonable length
     
     elif plate_type.lower() == 'european':
         # Try to match European license plate formats

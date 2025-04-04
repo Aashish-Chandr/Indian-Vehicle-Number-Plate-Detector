@@ -1,14 +1,16 @@
 import os
 import logging
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for
 import uuid
 import cv2
 import numpy as np
 from werkzeug.utils import secure_filename
 import tempfile
+import shutil
 from number_plate_detector import detect_number_plate
 from ocr_reader import extract_text_from_plate
 from utils import allowed_file, get_file_extension, create_directory_if_not_exists
+import model_trainer
 
 # Setup logging
 logging.basicConfig(level=logging.DEBUG)
@@ -156,6 +158,114 @@ def download_plate():
     except Exception as e:
         logger.error(f"Error downloading image: {str(e)}")
         return "Error downloading image", 500
+
+# Configure dataset folder
+DATASET_FOLDER = os.path.join(os.getcwd(), 'dataset')
+create_directory_if_not_exists(DATASET_FOLDER)
+app.config['DATASET_FOLDER'] = DATASET_FOLDER
+
+@app.route('/train')
+def train_page():
+    """Render the training page."""
+    return render_template('train.html')
+
+@app.route('/upload_dataset', methods=['POST'])
+def upload_dataset():
+    """
+    Process uploaded dataset.
+    - Save the dataset
+    - Organize it for training
+    - Return results
+    """
+    if 'dataset_zip' not in request.files:
+        return jsonify({'error': 'No dataset file uploaded'}), 400
+    
+    file = request.files['dataset_zip']
+    
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+    
+    # Check file type (accept only zip files)
+    if not file.filename.endswith('.zip'):
+        return jsonify({'error': 'Please upload a ZIP file containing the dataset'}), 400
+    
+    try:
+        # Generate unique dataset ID
+        dataset_id = str(uuid.uuid4())
+        dataset_path = os.path.join(app.config['DATASET_FOLDER'], dataset_id)
+        os.makedirs(dataset_path, exist_ok=True)
+        
+        # Save uploaded zip file
+        zip_path = os.path.join(dataset_path, 'dataset.zip')
+        file.save(zip_path)
+        logger.debug(f"Saved dataset zip to {zip_path}")
+        
+        # Extract the zip file
+        import zipfile
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(dataset_path)
+        
+        logger.debug(f"Extracted dataset to {dataset_path}")
+        
+        # Return success
+        return jsonify({
+            'success': True,
+            'dataset_id': dataset_id,
+            'message': 'Dataset uploaded successfully and is ready for training.'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error processing dataset: {str(e)}")
+        return jsonify({'error': f'Error processing dataset: {str(e)}'}), 500
+
+@app.route('/start_training', methods=['POST'])
+def start_training():
+    """
+    Start the model training process.
+    """
+    try:
+        # Get dataset ID from request
+        dataset_id = request.form.get('dataset_id')
+        if not dataset_id:
+            return jsonify({'error': 'No dataset ID provided'}), 400
+        
+        # Check if dataset exists
+        dataset_path = os.path.join(app.config['DATASET_FOLDER'], dataset_id)
+        if not os.path.exists(dataset_path):
+            return jsonify({'error': 'Dataset not found'}), 404
+        
+        # Get model type from request (default to random_forest)
+        model_type = request.form.get('model_type', 'random_forest')
+        
+        # Start training
+        success = model_trainer.run_model_training(dataset_path)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Model training completed successfully. The model is now ready for use.'
+            })
+        else:
+            return jsonify({
+                'error': 'Model training failed. Please check the dataset format and try again.'
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error training model: {str(e)}")
+        return jsonify({'error': f'Error training model: {str(e)}'}), 500
+
+@app.route('/get_training_status')
+def get_training_status():
+    """
+    Check if a trained model exists.
+    """
+    model_path = model_trainer.DEFAULT_MODEL_PATH
+    status = os.path.exists(model_path)
+    
+    return jsonify({
+        'model_exists': status,
+        'model_path': model_path if status else None
+    })
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
