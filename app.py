@@ -51,6 +51,9 @@ def upload_file():
     if file.filename == '':
         return jsonify({'error': 'No file selected'}), 400
     
+    # Get plate type (default to Indian)
+    plate_type = request.form.get('plate_type', 'indian')
+    
     if file and allowed_file(file.filename):
         try:
             # Generate unique filenames
@@ -81,16 +84,39 @@ def upload_file():
             logger.debug(f"Saved plate image to {plate_path}")
             
             # Extract text from number plate using OCR
-            plate_text = extract_text_from_plate(plate_image)
+            plate_text = extract_text_from_plate(plate_image, plate_type=plate_type)
+            
+            # Annotate the original image with bounding box
+            annotated_image = image.copy()
+            x, y, w, h = plate_bbox
+            cv2.rectangle(annotated_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            
+            # Add text label above the bounding box
+            label = plate_text if plate_text else "Unknown"
+            cv2.putText(annotated_image, label, (x, y - 10), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+            
+            # Save the annotated image
+            annotated_path = os.path.join(app.config['DETECTION_FOLDER'], f"{unique_id}_annotated.{extension}")
+            cv2.imwrite(annotated_path, annotated_image)
             
             # Return results
-            return jsonify({
+            result = {
                 'original_image': f"/get_image?path={original_path}&type=original",
                 'plate_image': f"/get_image?path={plate_path}&type=plate",
+                'annotated_image': f"/get_image?path={annotated_path}&type=annotated",
                 'plate_text': plate_text,
+                'plate_type': plate_type,
                 'download_url': f"/download?path={plate_path}",
+                'download_annotated_url': f"/download?path={annotated_path}",
                 'success': True
-            })
+            }
+            
+            # Add confidence metric if available
+            if hasattr(plate_text, 'confidence'):
+                result['confidence'] = plate_text.confidence
+                
+            return jsonify(result)
             
         except Exception as e:
             logger.error(f"Error processing image: {str(e)}")

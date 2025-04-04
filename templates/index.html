@@ -7,13 +7,13 @@
             <div class="card-header bg-primary text-white">
                 <h4 class="my-0">
                     <i class="fas fa-camera me-2"></i>
-                    Indian Vehicle Number Plate Detection
+                    Vehicle Number Plate Detection
                 </h4>
             </div>
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-12">
-                        <p class="lead">Upload an image of an Indian vehicle to detect and recognize the number plate.</p>
+                        <p class="lead">Upload a vehicle image to detect and recognize the number plate. Supports Indian, European, American, and other license plate formats.</p>
                     </div>
                 </div>
                 
@@ -29,6 +29,15 @@
                             <div id="file-preview-container" class="file-preview-container d-none">
                                 <div class="text-center mb-3">
                                     <img id="file-preview" class="img-fluid preview-image rounded" src="" alt="Preview">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="plate-type-select" class="form-label">License Plate Type:</label>
+                                    <select id="plate-type-select" class="form-select">
+                                        <option value="indian" selected>Indian</option>
+                                        <option value="european">European</option>
+                                        <option value="american">American</option>
+                                        <option value="other">Other</option>
+                                    </select>
                                 </div>
                                 <div class="d-flex justify-content-center">
                                     <button id="change-image-btn" class="btn btn-secondary me-2">
@@ -65,30 +74,28 @@
                     </h4>
                     
                     <div class="row">
-                        <!-- Original Image -->
                         <div class="col-md-6 mb-4">
                             <div class="card h-100">
                                 <div class="card-header">
                                     <h5 class="card-title mb-0">Original Image</h5>
                                 </div>
                                 <div class="card-body text-center">
-                                    <img id="original-image" class="img-fluid rounded" src="" alt="Original Image">
+                                    <img id="original-image" class="img-fluid mb-2 rounded" src="" alt="Original Image">
                                 </div>
                             </div>
                         </div>
-                        
-                        <!-- Detected Plate -->
                         <div class="col-md-6 mb-4">
                             <div class="card h-100">
                                 <div class="card-header">
-                                    <h5 class="card-title mb-0">Detected Number Plate</h5>
+                                    <h5 class="card-title mb-0">Detected Plate</h5>
                                 </div>
                                 <div class="card-body text-center">
-                                    <img id="plate-image" class="img-fluid rounded mb-3" src="" alt="Detected Plate">
-                                    <div class="plate-text-container p-2 rounded mb-3">
-                                        <h4 id="plate-text" class="mb-0"></h4>
+                                    <img id="plate-image" class="img-fluid mb-3 rounded" src="" alt="Detected Plate">
+                                    <div class="alert alert-info">
+                                        <strong>Recognized Text:</strong> 
+                                        <div class="mb-2"><span id="plate-text" class="font-monospace"></span></div><div class="mb-2"><strong>Plate Type:</strong> <span id="plate-type-display" class="badge bg-secondary"></span></div>
                                     </div>
-                                    <a id="download-plate-btn" href="#" class="btn btn-success">
+                                    <a id="download-plate-btn" class="btn btn-success" download>
                                         <i class="fas fa-download me-1"></i> Download Plate Image
                                     </a>
                                 </div>
@@ -96,12 +103,46 @@
                         </div>
                     </div>
                     
-                    <!-- Try Another Image Button -->
-                    <div class="row mt-3">
-                        <div class="col-12 text-center">
-                            <button id="try-again-btn" class="btn btn-primary">
-                                <i class="fas fa-redo me-1"></i> Try Another Image
-                            </button>
+                    <div class="mt-3 text-center">
+                        <button id="try-again-btn" class="btn btn-primary">
+                            <i class="fas fa-redo me-1"></i> Try Another Image
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-secondary text-white">
+                <h4 class="my-0">
+                    <i class="fas fa-info-circle me-2"></i>
+                    About This Application
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-12">
+                        <h5>Features:</h5>
+                        <ul>
+                            <li><strong>Multiple Plate Format Support:</strong> Detects and recognizes Indian, European, American, and other license plate formats.</li>
+                            <li><strong>Fast Detection:</strong> Efficiently detects license plates from vehicle images.</li>
+                            <li><strong>Accurate Text Recognition:</strong> Uses advanced OCR techniques to extract text from license plates.</li>
+                            <li><strong>Interactive UI:</strong> User-friendly interface with drag and drop image upload.</li>
+                            <li><strong>Download Results:</strong> Download the detected plate images for your records.</li>
+                        </ul>
+                        
+                        <h5 class="mt-4">How It Works:</h5>
+                        <ol>
+                            <li>Upload a vehicle image with a visible license plate.</li>
+                            <li>Select the appropriate license plate type.</li>
+                            <li>The system detects the plate location using computer vision.</li>
+                            <li>OCR technology extracts the text from the license plate.</li>
+                            <li>View and download the results.</li>
+                        </ol>
+                        
+                        <div class="alert alert-warning mt-3">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Note:</strong> For best results, use clear images where the license plate is visible and well-lit.
                         </div>
                     </div>
                 </div>
