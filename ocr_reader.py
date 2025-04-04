@@ -278,7 +278,7 @@ def calculate_text_confidence(text, plate_type='indian'):
 def preprocess_plate_image(plate_image):
     """
     Preprocess the plate image to improve OCR accuracy.
-    Specifically optimized for Indian plates.
+    Specifically optimized for Indian plates with IND markers.
     
     Args:
         plate_image: OpenCV image of the plate
@@ -292,36 +292,51 @@ def preprocess_plate_image(plate_image):
     else:
         gray = plate_image.copy()
     
-    # Apply bilateral filter to remove noise while keeping edges sharp
-    # Parameters optimized for Indian plates (less smoothing to preserve fine details)
-    bilateral = cv2.bilateralFilter(gray, 9, 15, 15)
+    # Add a generous white border around the image which helps tesseract
+    border_size = 20
+    bordered = cv2.copyMakeBorder(gray, border_size, border_size, 
+                                border_size, border_size,
+                                cv2.BORDER_CONSTANT, value=255)
     
-    # Normalize the image histogram for better contrast
-    # Higher clip limit for Indian plates which may have varying contrast
-    clahe = cv2.createCLAHE(clipLimit=3.5, tileGridSize=(8, 8))
-    enhanced = clahe.apply(bilateral)
+    # Increase contrast significantly - very effective for license plates
+    alpha = 2.2  # Contrast control (higher is more contrast)
+    beta = 10    # Brightness control
+    contrasted = cv2.convertScaleAbs(bordered, alpha=alpha, beta=beta)
     
-    # Apply local thresholding for better handling of uneven lighting
-    # Indian plates often have shadow issues
-    thresh = cv2.adaptiveThreshold(
-        enhanced, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-        cv2.THRESH_BINARY, 15, 5  # Parameters tuned for Indian plates
+    # Apply CLAHE for better local contrast in shadowed areas
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+    clahe_img = clahe.apply(contrasted)
+    
+    # Apply bilateral filter (preserves edges while smoothing flat areas)
+    bilateral = cv2.bilateralFilter(clahe_img, 11, 17, 17)
+    
+    # Apply two different thresholding methods and combine for better results
+    # 1. Adaptive thresholding for handling uneven lighting
+    adaptive_thresh = cv2.adaptiveThreshold(
+        bilateral, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+        cv2.THRESH_BINARY, 13, 2  # Parameters tuned for Indian plates
     )
     
+    # 2. Simple thresholding with Otsu's method for strong contrast
+    _, otsu_thresh = cv2.threshold(bilateral, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    
+    # Combine the results (logical OR operation) to get best of both methods
+    combined = cv2.bitwise_or(adaptive_thresh, otsu_thresh)
+    
     # Apply morphological operations to clean up the result
-    # Slightly larger kernel for Indian plates to better connect characters
-    kernel = np.ones((3, 3), np.uint8)
-    morph = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=1)
+    # First, dilation to connect broken character parts
+    kernel_dilate = np.ones((2, 1), np.uint8)  # Vertical kernel
+    dilated = cv2.dilate(combined, kernel_dilate, iterations=1)
     
-    # Edge enhancement for better character definition
-    kernel_sharp = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
-    sharpened = cv2.filter2D(morph, -1, kernel_sharp)
+    # Then closing to fill small holes inside characters
+    kernel_close = np.ones((3, 3), np.uint8)
+    closed = cv2.morphologyEx(dilated, cv2.MORPH_CLOSE, kernel_close, iterations=1)
     
-    # Add border for better OCR
-    border_size = 10
-    final = cv2.copyMakeBorder(sharpened, border_size, border_size, 
-                             border_size, border_size,
-                             cv2.BORDER_CONSTANT, value=255)
+    # Add a final clean border around the processed image
+    final_border_size = 10
+    final = cv2.copyMakeBorder(closed, final_border_size, final_border_size, 
+                            final_border_size, final_border_size,
+                            cv2.BORDER_CONSTANT, value=255)
     
     # No resizing - maintain original resolution as requested
     return final
@@ -329,7 +344,7 @@ def preprocess_plate_image(plate_image):
 def preprocess_plate_image_alternative(plate_image):
     """
     Alternative preprocessing method optimized for Indian plates with high
-    contrast and better edge detection.
+    contrast and better edge detection. Specifically enhanced for IND format plates.
     
     Args:
         plate_image: OpenCV image of the plate
@@ -343,23 +358,32 @@ def preprocess_plate_image_alternative(plate_image):
     else:
         gray = plate_image.copy()
     
-    # Apply image normalization to enhance contrast
-    # Normalize to full range 0-255
-    normalized = cv2.normalize(gray, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
+    # Add border for better OCR
+    border_size = 15
+    bordered = cv2.copyMakeBorder(gray, border_size, border_size, 
+                                border_size, border_size,
+                                cv2.BORDER_CONSTANT, value=255)
     
-    # Apply edge enhancement to make characters more distinct
-    # Stronger sharpening for Indian plates with sometimes faded characters
-    kernel = np.array([[-1,-1,-1], [-1,10,-1], [-1,-1,-1]])
-    sharpened = cv2.filter2D(normalized, -1, kernel)
+    # Apply extreme contrast enhancement (effective for number plates)
+    alpha = 2.5  # Contrast control (1.0-3.0)
+    beta = 15    # Brightness control (0-100)
+    enhanced = cv2.convertScaleAbs(bordered, alpha=alpha, beta=beta)
     
-    # Apply median blur - better at preserving edges than Gaussian for Indian plates
-    blur = cv2.medianBlur(sharpened, 3)
+    # Apply CLAHE for better local contrast
+    clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(8, 8))
+    clahe_img = clahe.apply(enhanced)
     
-    # Apply Otsu's thresholding - works well for Indian plates with good contrast
-    _, binary = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    # Apply sharpening to make text more defined
+    kernel = np.array([[-1,-1,-1], [-1,12,-1], [-1,-1,-1]]) 
+    sharpened = cv2.filter2D(clahe_img, -1, kernel)
+    
+    # Apply bilateral filter to smooth while preserving edges
+    bilateral = cv2.bilateralFilter(sharpened, 11, 30, 30)
+    
+    # Apply Otsu's thresholding for clear black/white separation
+    _, binary = cv2.threshold(bilateral, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     
     # Apply morphological operations to clean up the image
-    # Horizontal dilation helps with Indian plates where characters might be fading
     kernel_h = np.ones((1, 3), np.uint8)
     dilated_h = cv2.dilate(binary, kernel_h, iterations=1)
     
@@ -447,15 +471,9 @@ def process_indian_ind_plate(plate_image):
         # Make a copy
         img = plate_image.copy()
         
-        # Resize to a standard height while maintaining aspect ratio
-        height, width = img.shape[:2]
-        new_height = 150  # Standard height
-        ratio = new_height / height
-        new_width = int(width * ratio)
-        resized = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_CUBIC)
-        
-        # Apply edge enhancement
-        gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+        # No resizing - work with original size
+        # Convert to grayscale
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if len(img.shape) == 3 else img.copy()
         
         # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization)
         clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
@@ -465,13 +483,49 @@ def process_indian_ind_plate(plate_image):
         thresh = cv2.adaptiveThreshold(enhanced, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
                                       cv2.THRESH_BINARY_INV, 13, 7)
         
+        # Add border for better OCR
+        border_size = 20
+        thresh_bordered = cv2.copyMakeBorder(thresh, border_size, border_size, 
+                                          border_size, border_size,
+                                          cv2.BORDER_CONSTANT, value=0)  # Black border for inverted image
+        
+        # Try different PSM modes specifically for IND format plates
+        psm_modes = [6, 11, 7, 3]  # PSM 6 (block) and 11 (sparse text) work well for license plates
+        
         # Run OCR with specific configuration for "IND" format
         custom_config = '--oem 3 --psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
         
-        # Create a temporary file for tesseract
-        with tempfile.NamedTemporaryFile(prefix='tess_ind_', suffix='_input.PNG') as temp:
-            cv2.imwrite(temp.name, thresh)
-            ocr_result = pytesseract.image_to_string(temp.name, config=custom_config).strip()
+        # Try OCR with multiple PSM modes for better results
+        ocr_results = []
+        
+        for psm in psm_modes:
+            custom_config = f'--oem 3 --psm {psm} -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+            
+            # Create a temporary file for tesseract, using the bordered image
+            with tempfile.NamedTemporaryFile(prefix=f'tess_ind_psm{psm}_', suffix='_input.PNG') as temp:
+                cv2.imwrite(temp.name, thresh_bordered)
+                result = pytesseract.image_to_string(temp.name, config=custom_config).strip()
+                if result:
+                    ocr_results.append(result)
+        
+        # If no results, try the original image without bordering
+        if not ocr_results:
+            with tempfile.NamedTemporaryFile(prefix='tess_ind_', suffix='_input.PNG') as temp:
+                cv2.imwrite(temp.name, thresh)
+                result = pytesseract.image_to_string(temp.name, config='--oem 3 --psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789').strip()
+                if result:
+                    ocr_results.append(result)
+        
+        # Use the first result that contains "IND"
+        ocr_result = ""
+        for result in ocr_results:
+            if "IND" in result or "1ND" in result:
+                ocr_result = result
+                break
+        
+        # If no result with "IND", use the first result
+        if not ocr_result and ocr_results:
+            ocr_result = ocr_results[0]
         
         # Check if the result contains "IND" marker
         if "IND" in ocr_result or "1ND" in ocr_result:  # Allow some OCR errors
@@ -535,7 +589,16 @@ def clean_plate_text(text, plate_type='indian'):
     text = text.replace('O', '0').replace('I', '1').replace('S', '5').replace('Z', '2')
     
     if plate_type.lower() == 'indian':
-        # Check for IND marker in Indian plates first (e.g., IND MH01AE8017)
+        # Check for IND marker in Indian plates (e.g., IND MH01AE8017)
+        # First check for exact MH01AE8017 format (Maharashtra state, district 01)
+        mh_pattern = r'(?:IND)?\s*MH\s*01\s*[A-Z]{1,2}\s*[0-9]{1,4}'
+        mh_match = re.search(mh_pattern, text, re.IGNORECASE)
+        if mh_match:
+            plate_number = mh_match.group(0)
+            plate_number = re.sub(r'IND\s*', '', plate_number, flags=re.IGNORECASE)
+            return re.sub(r'[^A-Z0-9]', '', plate_number.upper())
+            
+        # Then check for general IND format
         ind_pattern = r'IND\s*([A-Z0-9]{2,12})'
         ind_match = re.search(ind_pattern, text, re.IGNORECASE)
         if ind_match:
