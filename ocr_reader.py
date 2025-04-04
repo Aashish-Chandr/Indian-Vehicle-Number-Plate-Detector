@@ -2,55 +2,48 @@ import cv2
 import numpy as np
 import pytesseract
 import re
-import logging
-import platform
 import os
+import logging
 import tempfile
 import Levenshtein
-from pathlib import Path
+from typing import Tuple, List, Optional
 
 # Setup logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# Check if tesseract is installed and set the path
 def check_tesseract_installation():
     """Check if tesseract is installed and configure the path"""
-    if platform.system() == 'Windows':  # Windows
-        # On Windows, pytesseract needs to know the location of tesseract.exe
-        if os.path.exists(r'C:\Program Files\Tesseract-OCR\tesseract.exe'):
-            pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-            return True
-    else:  # Linux/Mac
-        # Check common locations
+    try:
+        version = pytesseract.get_tesseract_version()
+        logger.debug(f"Found tesseract at: {pytesseract.pytesseract.tesseract_cmd}")
+        return True
+    except Exception as e:
+        logger.error(f"Tesseract not properly installed: {str(e)}")
+        
+        # Try to find tesseract in common locations
         possible_paths = [
             '/usr/bin/tesseract',
             '/usr/local/bin/tesseract',
             '/opt/homebrew/bin/tesseract',
-            '/nix/store/2paqyrmfbzasca0qjhmq2pw2g6jp5y7q-tesseract-5.3.0/bin/tesseract'
+            '/nix/store/*/bin/tesseract',  # Common in replit/nix
         ]
         
-        for path in possible_paths:
-            if os.path.exists(path):
-                logger.debug(f"Found tesseract at: {path}")
-                pytesseract.pytesseract.tesseract_cmd = path
+        for path_pattern in possible_paths:
+            if '*' in path_pattern:
+                # Handle wildcard paths
+                import glob
+                for path in glob.glob(path_pattern):
+                    if os.path.exists(path):
+                        pytesseract.pytesseract.tesseract_cmd = path
+                        logger.debug(f"Setting tesseract path to: {path}")
+                        return True
+            elif os.path.exists(path_pattern):
+                pytesseract.pytesseract.tesseract_cmd = path_pattern
+                logger.debug(f"Setting tesseract path to: {path_pattern}")
                 return True
-    
-    # If not found in common locations
-    try:
-        # Try to find tesseract in PATH
-        import subprocess
-        result = subprocess.run(['which', 'tesseract'], capture_output=True, text=True)
-        if result.returncode == 0:
-            tesseract_path = result.stdout.strip()
-            logger.debug(f"Found tesseract at: {tesseract_path}")
-            pytesseract.pytesseract.tesseract_cmd = tesseract_path
-            return True
-    except Exception as e:
-        logger.error(f"Error finding tesseract: {e}")
-    
-    logger.warning("Tesseract not found. OCR functionality may be limited.")
-    return False
+        
+        return False
 
 # Check tesseract installation on module import
 check_tesseract_installation()
@@ -76,43 +69,113 @@ def extract_text_from_plate(plate_image, plate_type='indian'):
         ocr_results = []
         confidences = []
         
+        # Optimize tesseract whitelist based on plate type
+        whitelist = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-'
+        
+        # For Indian plates, we can be more specific about allowed characters
+        if plate_type.lower() == 'indian':
+            # Most Indian plates use a subset of letters and numbers
+            whitelist = 'ABCDEFGHJKLMNOPQRSTUVWXYZ0123456789'
+        
         # Standard preprocessing
         processed_image1 = preprocess_plate_image(plate_image)
         
         # Alternative preprocessing with more aggressive thresholding
         processed_image2 = preprocess_plate_image_alternative(plate_image)
         
-        # Resized preprocessing
+        # Preprocessing with border (no resize)
         processed_image3 = preprocess_plate_image_resized(plate_image)
         
         # Try different PSM modes for better recognition
-        psm_modes = [7, 8, 6, 3]  # Order of likely effectiveness for license plates
+        psm_modes = [7, 8, 6, 11, 3]  # Order of likely effectiveness for license plates
+                                      # 11 is sparse text which can work well for plates
         
-        for img in [processed_image1, processed_image2, processed_image3]:
+        for idx, img in enumerate([processed_image1, processed_image2, processed_image3]):
             for psm in psm_modes:
                 try:
                     # Configure tesseract parameters
-                    custom_config = f'--oem 3 --psm {psm} -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-'
+                    custom_config = f'--oem 3 --psm {psm} -c tessedit_char_whitelist={whitelist}'
                     
-                    # Extract text
-                    text = pytesseract.image_to_string(img, config=custom_config).strip()
+                    # Save the processed image temporarily for easier debugging
+                    temp_img_path = os.path.join(tempfile.gettempdir(), f'tess_{next(tempfile._get_candidate_names())}_input.PNG')
+                    cv2.imwrite(temp_img_path, img)
                     
-                    # Clean up the text
+                    # Extract text with detailed logging
+                    logger.debug(f"Running tesseract with PSM {psm}: {[pytesseract.pytesseract.tesseract_cmd, temp_img_path, temp_img_path.replace('.PNG', ''), '--oem', '3', '--psm', str(psm), '-c', f'tessedit_char_whitelist={whitelist}', 'txt']}")
+                    text = pytesseract.image_to_string(temp_img_path, config=custom_config).strip()
+                    
+                    # Clean up the text with plate-type specific cleaning
                     cleaned_text = clean_plate_text(text, plate_type)
                     
-                    # If we got meaningful text
-                    if cleaned_text and len(cleaned_text) >= 4:
-                        # Calculate a simple confidence score based on length and content
+                    # If we got meaningful text (even 3 characters might be valid for some plates)
+                    if cleaned_text and len(cleaned_text) >= 3:
+                        # Calculate confidence score based on plate type and content
                         confidence = calculate_text_confidence(cleaned_text, plate_type)
                         
-                        # Add to results
-                        if cleaned_text not in ocr_results:
+                        # Add to results if not duplicate or if better confidence
+                        duplicate_idx = -1
+                        for result_idx, result in enumerate(ocr_results):
+                            if result == cleaned_text:
+                                duplicate_idx = result_idx
+                                break
+                            
+                            # Check for similar results using Levenshtein distance
+                            if Levenshtein.distance(result, cleaned_text) <= min(2, len(cleaned_text) // 3):
+                                duplicate_idx = result_idx
+                                break
+                        
+                        if duplicate_idx >= 0:
+                            # If duplicate with higher confidence, replace
+                            if confidence > confidences[duplicate_idx]:
+                                confidences[duplicate_idx] = confidence
+                        else:
+                            # New result
                             ocr_results.append(cleaned_text)
                             confidences.append(confidence)
-                            
-                            logger.debug(f"OCR result (PSM {psm}): {cleaned_text}, confidence: {confidence}")
+                            logger.debug(f"OCR result (method {idx}, PSM {psm}): {cleaned_text}, confidence: {confidence}")
                 except Exception as e:
                     logger.error(f"Error in OCR with PSM {psm}: {str(e)}")
+        
+        # Group similar results
+        if len(ocr_results) > 1:
+            try:
+                # Create clusters of similar results
+                clusters = []
+                cluster_confidences = []
+                
+                # Start with the highest confidence result
+                sorted_indices = sorted(range(len(confidences)), key=lambda i: confidences[i], reverse=True)
+                
+                for idx in sorted_indices:
+                    result = ocr_results[idx]
+                    confidence = confidences[idx]
+                    
+                    # Check if similar to any existing cluster
+                    found_cluster = False
+                    for c_idx, cluster in enumerate(clusters):
+                        # Compare with the representative item in the cluster
+                        if Levenshtein.distance(result, cluster[0]) <= min(2, len(result) // 3):
+                            cluster.append(result)
+                            # Increase confidence of cluster with each similar result
+                            cluster_confidences[c_idx] += confidence * 0.5
+                            found_cluster = True
+                            break
+                    
+                    # If not similar to any cluster, create new cluster
+                    if not found_cluster:
+                        clusters.append([result])
+                        cluster_confidences.append(confidence)
+                
+                # Select the cluster with highest confidence
+                if clusters:
+                    best_cluster_idx = cluster_confidences.index(max(cluster_confidences))
+                    best_result = clusters[best_cluster_idx][0]  # Use the representative item
+                    
+                    # Clear results and add only the winner
+                    ocr_results = [best_result]
+                    confidences = [cluster_confidences[best_cluster_idx]]
+            except Exception as e:
+                logger.error(f"Error in cluster analysis: {str(e)}")
         
         # If we have results, return the one with highest confidence
         if ocr_results:
@@ -202,24 +265,20 @@ def preprocess_plate_image(plate_image):
     # Apply bilateral filter to remove noise while keeping edges sharp
     bilateral = cv2.bilateralFilter(gray, 11, 17, 17)
     
-    # Apply adaptive threshold
-    thresh = cv2.adaptiveThreshold(bilateral, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                                  cv2.THRESH_BINARY_INV, 11, 2)
+    # Normalize the image histogram for better contrast
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+    enhanced = clahe.apply(bilateral)
     
-    # Dilate to connect components
-    kernel = np.ones((3,3), np.uint8)
-    dilate = cv2.dilate(thresh, kernel, iterations=1)
+    # Apply Otsu's thresholding for better binarization
+    _, thresh = cv2.threshold(enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     
-    # Erode to remove small noise
-    erode = cv2.erode(dilate, kernel, iterations=1)
+    # Fine-tune the threshold to improve character definition
+    # Apply morphological operations to clean up the result
+    kernel = np.ones((2, 2), np.uint8)
+    morph = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=1)
     
-    # Invert back for OCR (white text on black background)
-    processed = cv2.bitwise_not(erode)
-    
-    # Resize for better OCR
-    processed = cv2.resize(processed, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-    
-    return processed
+    # No resizing - maintain original resolution
+    return morph
 
 def preprocess_plate_image_alternative(plate_image):
     """
@@ -234,29 +293,27 @@ def preprocess_plate_image_alternative(plate_image):
     # Convert to grayscale
     gray = cv2.cvtColor(plate_image, cv2.COLOR_BGR2GRAY)
     
-    # Normalize lighting
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-    gray = clahe.apply(gray)
+    # Apply edge enhancement to make characters more distinct
+    kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
+    sharpened = cv2.filter2D(gray, -1, kernel)
     
-    # Apply Gaussian blur to reduce noise
-    blur = cv2.GaussianBlur(gray, (5, 5), 0)
+    # Apply Gaussian blur to reduce noise but maintain character edges
+    blur = cv2.GaussianBlur(sharpened, (3, 3), 0)
     
-    # Apply Otsu's thresholding
-    _, thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    # Adaptive thresholding for better handling of lighting variations
+    thresh = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                               cv2.THRESH_BINARY, 11, 3)
     
-    # Apply morphological operations
-    kernel = np.ones((3,3), np.uint8)
-    opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=1)
-    closing = cv2.morphologyEx(opening, cv2.MORPH_CLOSE, kernel, iterations=1)
+    # Apply morphological operations to clean up the image
+    kernel = np.ones((2,2), np.uint8)
+    closing = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=1)
     
-    # Resize for better OCR
-    processed = cv2.resize(closing, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-    
-    return processed
+    # No resizing - maintain original resolution
+    return closing
 
 def preprocess_plate_image_resized(plate_image):
     """
-    Preprocessing with different resize and border padding.
+    Preprocessing with border padding but no resizing.
     
     Args:
         plate_image: OpenCV image of the plate
@@ -267,27 +324,29 @@ def preprocess_plate_image_resized(plate_image):
     # Convert to grayscale
     gray = cv2.cvtColor(plate_image, cv2.COLOR_BGR2GRAY)
     
-    # Add border to help with character extraction
+    # Add border to help with character extraction - important for OCR
     border_size = 10
     gray_bordered = cv2.copyMakeBorder(gray, border_size, border_size, border_size, border_size,
                                      cv2.BORDER_CONSTANT, value=[255, 255, 255])
     
-    # Increase contrast
-    alpha = 1.5  # Contrast control
-    beta = 10    # Brightness control
+    # Increase contrast for better character definition
+    alpha = 2.0  # Contrast control
+    beta = 5     # Brightness control
     adjusted = cv2.convertScaleAbs(gray_bordered, alpha=alpha, beta=beta)
     
-    # Apply Gaussian blur to reduce noise
-    blur = cv2.GaussianBlur(adjusted, (3, 3), 0)
+    # Apply bilateral filter to smooth noise while preserving edges
+    bilateral = cv2.bilateralFilter(adjusted, 9, 75, 75)
     
-    # Apply adaptive thresholding
-    thresh = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_MEAN_C, 
-                                 cv2.THRESH_BINARY, 11, 2)
+    # Apply local adaptive thresholding
+    thresh = cv2.adaptiveThreshold(bilateral, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                 cv2.THRESH_BINARY, 13, 4)
     
-    # Resize larger for better OCR
-    processed = cv2.resize(thresh, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
+    # Apply morphological closing to connect nearby components
+    kernel = np.ones((2,2), np.uint8)
+    morph = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=1)
     
-    return processed
+    # No resizing as requested
+    return morph
 
 def clean_plate_text(text, plate_type='indian'):
     """
