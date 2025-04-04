@@ -1,0 +1,112 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-primary text-white">
+                <h4 class="my-0">
+                    <i class="fas fa-camera me-2"></i>
+                    Indian Vehicle Number Plate Detection
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-12">
+                        <p class="lead">Upload an image of an Indian vehicle to detect and recognize the number plate.</p>
+                    </div>
+                </div>
+                
+                <!-- Upload Form -->
+                <div class="row mt-3">
+                    <div class="col-md-12">
+                        <div id="upload-container" class="upload-container border rounded p-4 text-center">
+                            <div id="drop-area" class="drop-area mb-3">
+                                <i class="fas fa-cloud-upload-alt fa-3x mb-3"></i>
+                                <p>Drag and drop an image here or click to select</p>
+                                <input type="file" id="file-input" class="file-input" accept=".jpg,.jpeg,.png" />
+                            </div>
+                            <div id="file-preview-container" class="file-preview-container d-none">
+                                <div class="text-center mb-3">
+                                    <img id="file-preview" class="img-fluid preview-image rounded" src="" alt="Preview">
+                                </div>
+                                <div class="d-flex justify-content-center">
+                                    <button id="change-image-btn" class="btn btn-secondary me-2">
+                                        <i class="fas fa-exchange-alt me-1"></i> Change Image
+                                    </button>
+                                    <button id="process-image-btn" class="btn btn-primary">
+                                        <i class="fas fa-search me-1"></i> Detect Number Plate
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Loading Indicator -->
+                <div id="loading-container" class="text-center my-4 d-none">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Processing image, please wait...</p>
+                </div>
+                
+                <!-- Error Alert -->
+                <div id="error-container" class="alert alert-danger mt-3 d-none">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <span id="error-message"></span>
+                </div>
+                
+                <!-- Results Section -->
+                <div id="results-container" class="mt-4 d-none">
+                    <h4 class="border-bottom pb-2 mb-3">
+                        <i class="fas fa-search me-2"></i>
+                        Detection Results
+                    </h4>
+                    
+                    <div class="row">
+                        <!-- Original Image -->
+                        <div class="col-md-6 mb-4">
+                            <div class="card h-100">
+                                <div class="card-header">
+                                    <h5 class="card-title mb-0">Original Image</h5>
+                                </div>
+                                <div class="card-body text-center">
+                                    <img id="original-image" class="img-fluid rounded" src="" alt="Original Image">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Detected Plate -->
+                        <div class="col-md-6 mb-4">
+                            <div class="card h-100">
+                                <div class="card-header">
+                                    <h5 class="card-title mb-0">Detected Number Plate</h5>
+                                </div>
+                                <div class="card-body text-center">
+                                    <img id="plate-image" class="img-fluid rounded mb-3" src="" alt="Detected Plate">
+                                    <div class="plate-text-container p-2 rounded mb-3">
+                                        <h4 id="plate-text" class="mb-0"></h4>
+                                    </div>
+                                    <a id="download-plate-btn" href="#" class="btn btn-success">
+                                        <i class="fas fa-download me-1"></i> Download Plate Image
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Try Another Image Button -->
+                    <div class="row mt-3">
+                        <div class="col-12 text-center">
+                            <button id="try-again-btn" class="btn btn-primary">
+                                <i class="fas fa-redo me-1"></i> Try Another Image
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

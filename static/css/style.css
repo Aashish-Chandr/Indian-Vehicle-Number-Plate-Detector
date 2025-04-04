@@ -1,0 +1,58 @@
+/* Custom styles for the application */
+
+/* Upload area styling */
+.upload-container {
+    background-color: var(--bs-dark-bg-subtle);
+    transition: all 0.3s ease;
+}
+
+.drop-area {
+    padding: 40px 20px;
+    cursor: pointer;
+    border: 2px dashed var(--bs-primary);
+    border-radius: 0.25rem;
+    transition: all 0.3s ease;
+}
+
+.drop-area:hover {
+    background-color: var(--bs-dark);
+    border-color: var(--bs-info);
+}
+
+.drop-area.highlight {
+    border-color: var(--bs-info);
+    background-color: rgba(13, 202, 240, 0.1);
+}
+
+.file-input {
+    display: none;
+}
+
+.preview-image {
+    max-height: 300px;
+    width: auto;
+}
+
+/* Results styling */
+.plate-text-container {
+    background-color: var(--bs-dark);
+    border: 1px solid var(--bs-primary);
+}
+
+#plate-text {
+    font-family: 'Courier New', monospace;
+    letter-spacing: 2px;
+    font-weight: bold;
+    color: var(--bs-info);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .drop-area {
+        padding: 20px 10px;
+    }
+
+    .preview-image {
+        max-height: 200px;
+    }
+}
