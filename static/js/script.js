@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const originalImage = document.getElementById('original-image');
     const plateImage = document.getElementById('plate-image');
     const plateText = document.getElementById('plate-text');
+    const plateTypeDisplay = document.getElementById('plate-type-display');
     const downloadPlateBtn = document.getElementById('download-plate-btn');
     const tryAgainBtn = document.getElementById('try-again-btn');
     
@@ -144,9 +145,14 @@ document.addEventListener('DOMContentLoaded', function() {
         // Hide error if it was shown
         hideError();
         
+        // Get selected plate type
+        const plateTypeSelect = document.getElementById('plate-type-select');
+        const plateType = plateTypeSelect.value;
+        
         // Create form data to send to server
         const formData = new FormData();
         formData.append('file', fileInput.files[0]);
+        formData.append('plate_type', plateType);
         
         // Send to server
         fetch('/upload', {
@@ -186,6 +192,13 @@ document.addEventListener('DOMContentLoaded', function() {
         // Set plate text
         plateText.textContent = data.plate_text || 'No text detected';
         
+        // Set plate type
+        if (plateTypeDisplay) {
+            // Format plate type for display (capitalize first letter)
+            const formattedType = data.plate_type.charAt(0).toUpperCase() + data.plate_type.slice(1);
+            plateTypeDisplay.textContent = formattedType;
+        }
+        
         // Set download link
         downloadPlateBtn.href = data.download_url;
         
@@ -215,6 +228,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Clear plate text
         plateText.textContent = '';
+        if (plateTypeDisplay) {
+            plateTypeDisplay.textContent = '';
+        }
     }
     
     function showError(message) {
