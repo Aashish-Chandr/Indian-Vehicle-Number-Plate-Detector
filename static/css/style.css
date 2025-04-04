@@ -46,6 +46,28 @@
     color: var(--bs-info);
 }
 
+/* Training page styling */
+.upload-area {
+    border: 2px dashed var(--bs-primary);
+    border-radius: 0.25rem;
+    padding: 40px 20px;
+    height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.upload-area:hover, .upload-area.highlight {
+    background-color: var(--bs-dark);
+    border-color: var(--bs-info);
+}
+
+.upload-content {
+    text-align: center;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .drop-area {
@@ -55,4 +77,31 @@
     .preview-image {
         max-height: 200px;
     }
+    
+    .upload-area {
+        height: 160px;
+        padding: 20px 10px;
+    }
+}
+
+/* Training page styling */
+.upload-area {
+    border: 2px dashed var(--bs-primary);
+    border-radius: 0.25rem;
+    padding: 40px 20px;
+    height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.upload-area:hover, .upload-area.highlight {
+    background-color: var(--bs-dark);
+    border-color: var(--bs-info);
+}
+
+.upload-content {
+    text-align: center;
 }

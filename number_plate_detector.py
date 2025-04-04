@@ -6,6 +6,13 @@ import urllib.request
 import time
 from pathlib import Path
 
+# Import model trainer if available
+try:
+    import model_trainer
+    MODEL_TRAINER_AVAILABLE = True
+except ImportError:
+    MODEL_TRAINER_AVAILABLE = False
+
 # Setup logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -19,6 +26,7 @@ ALT_CASCADE_URL = "https://raw.githubusercontent.com/opencv/opencv/master/data/h
 MODEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'models')
 CASCADE_PATH = os.path.join(MODEL_DIR, 'haarcascade_license_plate.xml')
 ALT_CASCADE_PATH = os.path.join(MODEL_DIR, 'haarcascade_alt_license_plate.xml')
+CUSTOM_MODEL_PATH = os.path.join(MODEL_DIR, 'indian_plate_classifier.pkl')
 
 # Check if ultralytics is available for YOLO model
 try:
@@ -148,6 +156,116 @@ def detect_plate_with_yolo(image):
     
     return None, None
 
+def detect_plate_with_custom_model(image):
+    """
+    Detect number plate using the custom trained model for Indian plates.
+    
+    Args:
+        image: OpenCV image
+        
+    Returns:
+        plate_image: Cropped plate image
+        plate_bbox: Bounding box coordinates
+    """
+    # Check if custom model is available
+    if not MODEL_TRAINER_AVAILABLE or not os.path.exists(CUSTOM_MODEL_PATH):
+        logger.debug("Custom model not available")
+        return None, None
+    
+    try:
+        # Load the model
+        model, label_encoder = model_trainer.load_trained_model(CUSTOM_MODEL_PATH)
+        if model is None:
+            logger.warning("Failed to load custom model")
+            return None, None
+        
+        # Use contour detection to get candidate regions
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        blur = cv2.GaussianBlur(gray, (5, 5), 0)
+        
+        # Apply Sobel edge detection optimized for Indian plates
+        sobel_x = cv2.Sobel(blur, cv2.CV_64F, 1, 0, ksize=3)
+        sobel_y = cv2.Sobel(blur, cv2.CV_64F, 0, 1, ksize=3)
+        abs_sobel_x = cv2.convertScaleAbs(sobel_x)
+        abs_sobel_y = cv2.convertScaleAbs(sobel_y)
+        edges = cv2.addWeighted(abs_sobel_x, 0.7, abs_sobel_y, 0.3, 0)  # More weight to horizontal edges for plates
+        
+        # Apply threshold
+        _, thresh = cv2.threshold(edges, 150, 255, cv2.THRESH_BINARY)
+        
+        # Apply morphological operations to enhance plate regions
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (20, 5))
+        morph = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+        
+        # Find contours
+        contours, _ = cv2.findContours(morph, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        # Filter contours by aspect ratio and area - adjusted for Indian plates
+        possible_plates = []
+        for contour in contours:
+            x, y, w, h = cv2.boundingRect(contour)
+            area = w * h
+            aspect_ratio = float(w) / h
+            
+            # Indian plates typically have aspect ratio between 2.0 and 5.0
+            if area > 1000 and 2.0 < aspect_ratio < 6.0:
+                possible_plates.append((x, y, w, h))
+        
+        if not possible_plates:
+            logger.debug("No candidate plate regions found")
+            return None, None
+        
+        # Score each candidate using the model
+        best_score = -1
+        best_plate = None
+        
+        for x, y, w, h in possible_plates:
+            # Add margin around the plate
+            margin_x = int(w * 0.05)
+            margin_y = int(h * 0.1)
+            
+            x1 = max(0, x - margin_x)
+            y1 = max(0, y - margin_y)
+            x2 = min(image.shape[1], x + w + margin_x)
+            y2 = min(image.shape[0], y + h + margin_y)
+            
+            # Extract plate region
+            plate_region = image[y1:y2, x1:x2]
+            
+            # Check if region is valid
+            if plate_region.size == 0:
+                continue
+                
+            try:
+                # Convert to features using the same preprocessing as training
+                features = model_trainer.preprocess_image_for_training(plate_region)
+                
+                if features is None:
+                    continue
+                
+                # Get prediction confidence
+                prediction_proba = model.predict_proba([features])[0]
+                score = np.mean(prediction_proba)  # Average confidence across classes
+                
+                logger.debug(f"Plate candidate score: {score:.4f}")
+                
+                if score > best_score:
+                    best_score = score
+                    best_plate = (x1, y1, x2-x1, y2-y1)
+            except Exception as e:
+                logger.error(f"Error scoring plate candidate: {str(e)}")
+        
+        # Use the best plate if score is above threshold
+        if best_plate and best_score > 0.3:  # Lower threshold since this is just for detection
+            x, y, w, h = best_plate
+            plate_image = image[y:y+h, x:x+w].copy()
+            return plate_image, [x, y, w, h]
+        
+    except Exception as e:
+        logger.error(f"Error in custom model detection: {str(e)}")
+    
+    return None, None
+
 def detect_number_plate(image):
     """
     Detect number plate in the given image using a combination of methods.
@@ -179,7 +297,24 @@ def detect_number_plate(image):
         except Exception as e:
             logger.error(f"Error in YOLO detection: {str(e)}")
     
-    # If YOLO fails or is not available, try other methods
+    # Try custom model for Indian plates if available
+    if MODEL_TRAINER_AVAILABLE and os.path.exists(CUSTOM_MODEL_PATH):
+        try:
+            logger.debug("Trying custom model for Indian plate detection")
+            plate_image, plate_bbox = detect_plate_with_custom_model(img_copy)
+            
+            if plate_image is not None and plate_image.size > 0:
+                # Check if the plate has reasonable dimensions
+                h, w = plate_image.shape[:2]
+                if w > 0 and h > 0 and w > 2*h and w < 8*h and w*h > 1000:
+                    logger.debug("Plate detected using custom Indian model")
+                    return plate_image, plate_bbox
+                else:
+                    logger.debug(f"Plate from custom model had invalid dimensions: {w}x{h}")
+        except Exception as e:
+            logger.error(f"Error in custom model detection: {str(e)}")
+    
+    # If YOLO and custom model fail or are not available, try other methods
     methods = [
         detect_plate_with_cascade,
         detect_plate_with_contours
