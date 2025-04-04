@@ -266,6 +266,86 @@ def detect_plate_with_custom_model(image):
     
     return None, None
 
+def detect_indian_plate_with_ind_marker(image):
+    """
+    Specifically detect Indian license plates with "IND" marker based on color and shape analysis.
+    
+    Args:
+        image: OpenCV image
+        
+    Returns:
+        plate_image: Cropped plate image
+        plate_bbox: Bounding box coordinates
+    """
+    try:
+        # Make a copy to avoid modifying the original
+        img = image.copy()
+        
+        # Convert to HSV color space for better color segmentation
+        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        
+        # Define white range for license plate background (typical for Indian plates)
+        lower_white = np.array([0, 0, 180])
+        upper_white = np.array([180, 30, 255])
+        
+        # Create mask for white regions
+        white_mask = cv2.inRange(hsv, lower_white, upper_white)
+        
+        # Apply morphological operations to enhance plate regions
+        kernel = np.ones((5, 5), np.uint8)
+        white_mask = cv2.morphologyEx(white_mask, cv2.MORPH_CLOSE, kernel)
+        white_mask = cv2.morphologyEx(white_mask, cv2.MORPH_OPEN, kernel)
+        
+        # Find contours in the white mask
+        contours, _ = cv2.findContours(white_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        # Filter contours by size and aspect ratio specific to Indian plates
+        possible_plates = []
+        for contour in contours:
+            x, y, w, h = cv2.boundingRect(contour)
+            area = w * h
+            aspect_ratio = float(w) / h
+            
+            # Indian plates with IND marker typically have aspect ratio between 3.0 and 6.0
+            # and are relatively large in the image
+            if area > 5000 and 3.0 < aspect_ratio < 6.0:
+                # Calculate the relative size in the image
+                img_area = img.shape[0] * img.shape[1]
+                relative_size = area / img_area
+                
+                # Plates usually occupy a reasonable portion of the image
+                if 0.03 < relative_size < 0.3:
+                    possible_plates.append((x, y, w, h, area))
+        
+        # If no plates detected with specific criteria, return None
+        if not possible_plates:
+            return None, None
+            
+        # Sort by area in descending order
+        possible_plates.sort(key=lambda x: x[4], reverse=True)
+        
+        # Take the largest plate
+        x, y, w, h, _ = possible_plates[0]
+        
+        # Add a small margin around the plate
+        margin_x = int(w * 0.05)
+        margin_y = int(h * 0.1)
+        
+        x1 = max(0, x - margin_x)
+        y1 = max(0, y - margin_y)
+        x2 = min(img.shape[1], x + w + margin_x)
+        y2 = min(img.shape[0], y + h + margin_y)
+        
+        # Extract the plate image
+        plate_image = img[y1:y2, x1:x2]
+        
+        # Return the plate and coordinates
+        return plate_image, [x1, y1, x2-x1, y2-y1]
+        
+    except Exception as e:
+        logger.error(f"Error in Indian plate with IND marker detection: {str(e)}")
+        return None, None
+
 def detect_number_plate(image):
     """
     Detect number plate in the given image using a combination of methods.
@@ -280,7 +360,23 @@ def detect_number_plate(image):
     # Make a copy of the image
     img_copy = image.copy()
     
-    # First, try YOLO if available (most accurate)
+    # First try the Indian-specific detector for plates with IND marker
+    try:
+        logger.debug("Trying Indian plate with IND marker detection")
+        plate_image, plate_bbox = detect_indian_plate_with_ind_marker(img_copy)
+        
+        if plate_image is not None and plate_image.size > 0:
+            # Check if the plate has reasonable dimensions
+            h, w = plate_image.shape[:2]
+            if w > 0 and h > 0 and w > 2*h and w < 8*h and w*h > 1000:
+                logger.debug("Plate detected using Indian plate with IND marker detector")
+                return plate_image, plate_bbox
+            else:
+                logger.debug(f"Plate from Indian plate detector had invalid dimensions: {w}x{h}")
+    except Exception as e:
+        logger.error(f"Error in Indian plate detection: {str(e)}")
+    
+    # Try YOLO if available (most accurate)
     if YOLO_AVAILABLE:
         try:
             logger.debug("Trying YOLO detection")

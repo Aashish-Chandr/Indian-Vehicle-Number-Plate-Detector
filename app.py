@@ -168,6 +168,44 @@ app.config['DATASET_FOLDER'] = DATASET_FOLDER
 def train_page():
     """Render the training page."""
     return render_template('train.html')
+    
+@app.route('/test_ind_plate')
+def test_ind_plate():
+    """Test the IND plate detection with a sample image."""
+    try:
+        # Path to the test image
+        test_image_path = 'static/temp_test_plate.jpg'
+        
+        # Read the image
+        image = cv2.imread(test_image_path)
+        if image is None:
+            return jsonify({'error': 'Could not read test image'}), 400
+            
+        # Detect plate
+        plate_image, plate_bbox = detect_number_plate(image)
+        
+        if plate_image is None:
+            return jsonify({'error': 'No license plate detected in the image'}), 400
+            
+        # Save detected plate
+        detection_id = str(uuid.uuid4())
+        plate_path = os.path.join(app.config['DETECTION_FOLDER'], f'plate_{detection_id}.jpg')
+        cv2.imwrite(plate_path, plate_image)
+        
+        # Extract text from the plate image
+        plate_text = extract_text_from_plate(plate_image, 'indian')
+        
+        # Return results
+        return jsonify({
+            'success': True,
+            'message': 'License plate detected and processed successfully',
+            'plate_text': plate_text,
+            'plate_image': f'/get_image?path={plate_path}',
+            'download_url': f'/download_plate?id={detection_id}'
+        })
+    except Exception as e:
+        logger.error(f"Error in test_ind_plate: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/upload_dataset', methods=['POST'])
 def upload_dataset():
