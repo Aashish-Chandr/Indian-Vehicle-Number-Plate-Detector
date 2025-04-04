@@ -46,6 +46,34 @@
     color: var(--bs-info);
 }
 
+/* Loading animation styling */
+.auto-rickshaw-loader {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.auto-rickshaw-container {
+    width: 240px;
+    height: 120px;
+    margin-bottom: 15px;
+}
+
+.loading-text {
+    font-size: 1.2rem;
+    margin-top: 10px;
+    color: var(--bs-primary);
+    font-weight: 500;
+}
+
+.loading-subtext {
+    font-size: 0.9rem;
+    color: var(--bs-secondary);
+    margin-top: 5px;
+}
+
 /* Training page styling */
 .upload-area {
     border: 2px dashed var(--bs-primary);
@@ -82,26 +110,9 @@
         height: 160px;
         padding: 20px 10px;
     }
-}
-
-/* Training page styling */
-.upload-area {
-    border: 2px dashed var(--bs-primary);
-    border-radius: 0.25rem;
-    padding: 40px 20px;
-    height: 200px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.upload-area:hover, .upload-area.highlight {
-    background-color: var(--bs-dark);
-    border-color: var(--bs-info);
-}
-
-.upload-content {
-    text-align: center;
+    
+    .auto-rickshaw-container {
+        width: 200px;
+        height: 100px;
+    }
 }

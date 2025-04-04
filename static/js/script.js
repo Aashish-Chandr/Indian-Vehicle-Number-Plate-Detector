@@ -149,6 +149,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const plateTypeSelect = document.getElementById('plate-type-select');
         const plateType = plateTypeSelect.value;
         
+        // Update loading text based on plate type
+        const loadingText = document.querySelector('.loading-text');
+        if (loadingText) {
+            loadingText.textContent = `Detecting ${plateType.charAt(0).toUpperCase() + plateType.slice(1)} Number Plate...`;
+        }
+        
         // Create form data to send to server
         const formData = new FormData();
         formData.append('file', fileInput.files[0]);
