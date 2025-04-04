@@ -1,0 +1,119 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-primary text-white">
+                <h4 class="my-0">
+                    <i class="fas fa-car me-2"></i>
+                    Maharashtra License Plate Recognition Test
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <strong>Testing:</strong> 
+                    <p>This is a specialized test page for Maharashtra license plates with "IND" marker.</p>
+                    <p>Click the button below to test plate recognition with our sample plate image (MH01AE8017).</p>
+                </div>
+                
+                <div class="text-center mb-4">
+                    <a href="/test_maharashtra_plate" class="btn btn-primary btn-lg">
+                        <i class="fas fa-vial me-1"></i> Test Maharashtra Plate Recognition
+                    </a>
+                </div>
+                
+                <div id="loading-container" class="text-center my-4 d-none">
+                    <div class="auto-rickshaw-loader">
+                        <div class="auto-rickshaw-container">
+                            <img src="{{ url_for('static', filename='img/auto-rickshaw.svg') }}" alt="Auto Rickshaw" class="img-fluid">
+                        </div>
+                        <div class="loading-text">Detecting Maharashtra Number Plate...</div>
+                        <div class="loading-subtext">Our auto-rickshaw is on the way with your results!</div>
+                    </div>
+                </div>
+                
+                <!-- Results Section -->
+                <div id="results-container" class="mt-4 d-none">
+                    <h4 class="border-bottom pb-2 mb-3">
+                        <i class="fas fa-search me-2"></i>
+                        Detection Results
+                    </h4>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-4">
+                            <div class="card h-100">
+                                <div class="card-header">
+                                    <h5 class="card-title mb-0">License Plate Image</h5>
+                                </div>
+                                <div class="card-body text-center">
+                                    <img id="plate-image" class="img-fluid mb-3 rounded" src="" alt="Maharashtra Plate">
+                                    <div class="alert alert-success">
+                                        <strong>Recognized Text:</strong> 
+                                        <div class="mb-2"><span id="plate-text" class="font-monospace"></span></div>
+                                    </div>
+                                    <a id="download-plate-btn" class="btn btn-success" download>
+                                        <i class="fas fa-download me-1"></i> Download Plate Image
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-4 text-center">
+                    <a href="/" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left me-1"></i> Back to Home
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Include JavaScript for handling the test -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const testBtn = document.querySelector('a[href="/test_maharashtra_plate"]');
+    const loadingContainer = document.getElementById('loading-container');
+    const resultsContainer = document.getElementById('results-container');
+    const plateImage = document.getElementById('plate-image');
+    const plateText = document.getElementById('plate-text');
+    const downloadBtn = document.getElementById('download-plate-btn');
+    
+    if (testBtn) {
+        testBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Show loading
+            loadingContainer.classList.remove('d-none');
+            resultsContainer.classList.add('d-none');
+            
+            // Make API request
+            fetch('/test_maharashtra_plate')
+                .then(response => response.json())
+                .then(data => {
+                    // Hide loading
+                    loadingContainer.classList.add('d-none');
+                    
+                    if (data.success) {
+                        // Show results
+                        resultsContainer.classList.remove('d-none');
+                        
+                        // Update UI
+                        plateImage.src = data.plate_image;
+                        plateText.textContent = data.plate_text;
+                        downloadBtn.href = data.download_url;
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    loadingContainer.classList.add('d-none');
+                    alert('Error: ' + error);
+                });
+        });
+    }
+});
+</script>
+{% endblock %}
