@@ -1,0 +1,12 @@
+{
+  "buildCommand": "pip install -r requirements.txt",
+  "framework": "python",
+  "functions": {
+    "app.py": {
+      "runtime": "python3.11"
+    }
+  },
+  "env": {
+    "FLASK_ENV": "production"
+  }
+}
