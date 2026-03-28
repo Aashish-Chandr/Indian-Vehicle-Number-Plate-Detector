@@ -6,7 +6,6 @@ import cv2
 import numpy as np
 from werkzeug.utils import secure_filename
 import tempfile
-import shutil
 from number_plate_detector import detect_number_plate
 from ocr_reader import extract_text_from_plate
 from utils import allowed_file, get_file_extension, create_directory_if_not_exists
