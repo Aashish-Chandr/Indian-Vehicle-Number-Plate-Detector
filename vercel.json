@@ -1,5 +1,5 @@
 {
-  "buildCommand": "pip install -r requirements.txt",
+  "buildCommand": "bash build.sh",
   "functions": {
     "api/index.py": {
       "runtime": "python3.11",
@@ -9,7 +9,8 @@
   },
   "env": {
     "FLASK_ENV": "production",
-    "PYTHONUNBUFFERED": "1"
+    "PYTHONUNBUFFERED": "1",
+    "SESSION_SECRET": "secure-production-key-set-in-vercel-dashboard"
   },
   "rewrites": [
     {
