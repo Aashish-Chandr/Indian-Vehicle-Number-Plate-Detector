@@ -5,6 +5,7 @@ import re
 import os
 import logging
 import tempfile
+import uuid
 import Levenshtein
 from typing import Tuple, List, Optional
 
@@ -105,7 +106,7 @@ def extract_text_from_plate(plate_image, plate_type='indian'):
                     custom_config = f'--oem 3 --psm {psm} -c tessedit_char_whitelist={whitelist}'
                     
                     # Save the processed image temporarily for easier debugging
-                    temp_img_path = os.path.join(tempfile.gettempdir(), f'tess_{next(tempfile._get_candidate_names())}_input.PNG')
+                    temp_img_path = os.path.join(tempfile.gettempdir(), f'tess_{uuid.uuid4()}_input.PNG')
                     cv2.imwrite(temp_img_path, img)
                     
                     # Extract text with detailed logging

@@ -1,0 +1,20 @@
+{
+  "buildCommand": "bash build.sh",
+  "framework": "python",
+  "runtime": "python3.11",
+  "functions": {
+    "api/index.py": {
+      "runtime": "python3.11",
+      "maxDuration": 60
+    }
+  },
+  "env": {
+    "FLASK_ENV": "production"
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api"
+    }
+  ]
+}

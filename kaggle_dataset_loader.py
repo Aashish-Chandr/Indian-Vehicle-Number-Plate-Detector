@@ -1,7 +1,6 @@
 import os
 import logging
 import kagglehub
-import shutil
 import zipfile
 from pathlib import Path
 
