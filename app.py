@@ -17,8 +17,9 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # Create the Flask application
-app = Flask(__name__)
-app.secret_key = os.environ.get("SESSION_SECRET", "default-secret-key")
+app = Flask(__name__, static_folder='static', template_folder='templates')
+app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-key-change-in-production")
+app.config['JSON_SORT_KEYS'] = False
 
 # Configure upload folder
 UPLOAD_FOLDER = os.path.join(tempfile.gettempdir(), 'uploads')
@@ -31,15 +32,44 @@ app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['DETECTION_FOLDER'] = DETECTION_FOLDER
 
+@app.before_request
+def log_request():
+    """Log incoming requests."""
+    logger.debug(f"Request: {request.method} {request.path}")
+
+@app.errorhandler(404)
+def not_found(error):
+    """Handle 404 errors."""
+    return jsonify({'error': 'Not found'}), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    """Handle 500 errors."""
+    logger.error(f"Internal server error: {str(error)}")
+    return jsonify({'error': 'Internal server error'}), 500
+
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    """Handle file too large errors."""
+    return jsonify({'error': 'File is too large. Maximum size is 5MB'}), 413
+
 @app.route('/')
 def index():
     """Render the main page."""
-    return render_template('index.html')
+    try:
+        return render_template('index.html')
+    except Exception as e:
+        logger.error(f"Error rendering index: {str(e)}")
+        return jsonify({'error': 'Error loading page'}), 500
     
 @app.route('/maharashtra_test')
 def maharashtra_test():
     """Render the Maharashtra test page."""
-    return render_template('maharashtra_test.html')
+    try:
+        return render_template('maharashtra_test.html')
+    except Exception as e:
+        logger.error(f"Error rendering maharashtra_test: {str(e)}")
+        return jsonify({'error': 'Error loading Maharashtra test page'}), 500
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
